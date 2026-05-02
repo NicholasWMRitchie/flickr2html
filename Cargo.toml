@@ -1,0 +1,27 @@
+[package]
+name = "flickr2html"
+version = "0.1.0"
+edition = "2024"
+authors = [
+    "Nicholas Ritchie",
+    "Claude Code (Anthropic)",
+]
+description = "Convert a Flickr backup export into a self-contained static HTML5 photo gallery."
+license = "CC-BY-4.0"
+readme = "README.md"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+image = "0.25"
+kamadak-exif = "0.6"
+rayon = "1.10"
+log = "0.4"
+env_logger = "0.11"
+anyhow = "1.0"
+v_htmlescape = "0.15"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
