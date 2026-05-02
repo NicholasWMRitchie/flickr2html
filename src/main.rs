@@ -28,6 +28,15 @@ fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse();
 
+    if args.version {
+        println!("{}", cli::VERSION_LINE);
+        return Ok(());
+    }
+
+    // clap's `required_unless_present = "version"` guarantees these are Some here.
+    let input = args.input.expect("clap guards --input");
+    let output = args.output.expect("clap guards --output");
+
     if args.jobs > 0 {
         rayon::ThreadPoolBuilder::new()
             .num_threads(args.jobs)
@@ -35,7 +44,7 @@ fn main() -> Result<()> {
             .ok();
     }
 
-    let data_root = locate_data_root(&args.input)?;
+    let data_root = locate_data_root(&input)?;
     info!("data root: {}", data_root.display());
 
     let part_dir = locate_part_dir(&data_root)?;
@@ -59,9 +68,9 @@ fn main() -> Result<()> {
     let photo_index = PhotoIndex::build(&data_root)?;
     info!("indexed {} image file(s)", photo_index.len());
 
-    prepare_output_tree(&args.output)?;
-    fs::write(args.output.join("style.css"), STYLE_CSS)?;
-    fs::write(args.output.join("app.js"), APP_JS)?;
+    prepare_output_tree(&output)?;
+    fs::write(output.join("style.css"), STYLE_CSS)?;
+    fs::write(output.join("app.js"), APP_JS)?;
 
     let needed_ids = collect_referenced_ids(&albums);
     info!("{} unique photo(s) referenced by albums", needed_ids.len());
@@ -73,18 +82,18 @@ fn main() -> Result<()> {
         needed_ids.len() - resolved.len()
     );
 
-    materialize_images(&resolved, &args.output, args.copy_images)?;
+    materialize_images(&resolved, &output, args.copy_images)?;
     if !args.skip_thumbnails {
-        generate_thumbnails(&resolved, &args.output, args.thumb_size);
+        generate_thumbnails(&resolved, &output, args.thumb_size);
     }
     let exif_map = extract_exif_map(&resolved);
     info!("extracted EXIF for {} photo(s)", exif_map.len());
 
-    let render_inputs = build_render_inputs(&resolved, &exif_map, &args.output, args.skip_thumbnails);
-    render_albums(&albums, &render_inputs, &args.output)?;
-    render_index_page(&albums, &render_inputs, &args.output)?;
+    let render_inputs = build_render_inputs(&resolved, &exif_map, &output, args.skip_thumbnails);
+    render_albums(&albums, &render_inputs, &output)?;
+    render_index_page(&albums, &render_inputs, &output)?;
 
-    info!("done. Output: {}", args.output.display());
+    info!("done. Output: {}", output.display());
     Ok(())
 }
 
