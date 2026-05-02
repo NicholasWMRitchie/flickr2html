@@ -66,6 +66,14 @@ fn main() -> Result<()> {
             .cmp(&a.created.parse::<i64>().unwrap_or(0))
     });
 
+    if let Some(unsorted) = build_unsorted_album(&part_dir, &albums)? {
+        info!(
+            "found {} photo(s) not in any album; adding 'Unsorted' album",
+            unsorted.photos.len()
+        );
+        albums.push(unsorted);
+    }
+
     let photo_index = PhotoIndex::build(&data_root)?;
     info!("indexed {} image file(s)", photo_index.len());
 
@@ -172,6 +180,57 @@ fn collect_referenced_ids(albums: &[Album]) -> Vec<String> {
         }
     }
     out
+}
+
+/// Construct a synthetic "Unsorted" album of every photo sidecar in `part_dir`
+/// whose ID is not already referenced by some album. Returns None if the user's
+/// curated albums already cover everything.
+fn build_unsorted_album(part_dir: &Path, albums: &[Album]) -> Result<Option<Album>> {
+    let referenced: std::collections::HashSet<&str> = albums
+        .iter()
+        .flat_map(|a| a.photos.iter().map(|s| s.as_str()))
+        .collect();
+
+    let mut unsorted: Vec<String> = Vec::new();
+    for entry in fs::read_dir(part_dir)
+        .with_context(|| format!("read_dir {}", part_dir.display()))?
+    {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let Some(stem) = name
+            .strip_prefix("photo_")
+            .and_then(|s| s.strip_suffix(".json"))
+        else {
+            continue;
+        };
+        if stem.is_empty() || !stem.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        if !referenced.contains(stem) {
+            unsorted.push(stem.to_string());
+        }
+    }
+    if unsorted.is_empty() {
+        return Ok(None);
+    }
+    // Newest first: Flickr photo IDs grow over time, so a numeric desc sort
+    // is roughly chronological without needing to read every sidecar's date.
+    unsorted.sort_by(|a, b| {
+        b.parse::<u64>()
+            .unwrap_or(0)
+            .cmp(&a.parse::<u64>().unwrap_or(0))
+    });
+    let count = unsorted.len();
+    Ok(Some(Album {
+        id: "unsorted".to_string(),
+        title: "Unsorted".to_string(),
+        description: "Photos in the export that are not assigned to any album.".to_string(),
+        photo_count: count.to_string(),
+        created: "0".to_string(),
+        last_updated: "0".to_string(),
+        photos: unsorted,
+    }))
 }
 
 struct WorkItem {

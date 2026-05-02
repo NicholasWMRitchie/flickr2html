@@ -16,7 +16,10 @@ tying albums to images is a list of opaque numeric IDs in `albums.json`.
 - **One index page** listing every album, sorted newest-first, each with a
   cover thumbnail, title, and photo count.
 - **One album page per album**, showing the album title, description, and a
-  responsive thumbnail grid in the order Flickr authored.
+  responsive thumbnail grid in the order Flickr authored. A synthetic
+  **"Unsorted"** album (appended at the end of the index) collects every
+  photo in the export that wasn't placed in any user album, so nothing in
+  the photostream is silently dropped.
 - **An inline lightbox**: clicking a thumbnail overlays the full image at near
   fullscreen with the photo's name, description, date, and EXIF camera
   settings (camera, lens, exposure, aperture, ISO, focal length) where
