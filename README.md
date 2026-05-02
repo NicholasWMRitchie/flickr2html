@@ -55,7 +55,7 @@ flickr2html --input <DIR> --output <DIR> [options]
 | `--skip-thumbnails` | off | Don't generate thumbnails. The album grids will reference full-size originals — useful for fast iteration on the HTML/CSS, but slow to render in a browser. |
 | `--thumb-size <PX>` | `400` | Long-edge size of generated thumbnails, in pixels. |
 | `-j`, `--jobs <N>` | `0` (all cores) | Number of worker threads for parallel work. |
-| `-V`, `--version` | Displays the program name and version and exits. | 
+| `-V`, `--version` |  |Displays the program name and version and exits. | 
 
 Set `RUST_LOG=info` (or `warn`/`debug`) to control logging verbosity.
 
