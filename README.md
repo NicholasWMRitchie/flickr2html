@@ -54,8 +54,9 @@ flickr2html --input <DIR> --output <DIR> [options]
 | `--copy-images` | off | Deep-copy original images into `output/images/`. By default the tool **symlinks** instead, which is instant and keeps the output small but ties it to the source dir. Use `--copy-images` if you intend to move, archive, or upload the output tree. |
 | `--skip-thumbnails` | off | Don't generate thumbnails. The album grids will reference full-size originals — useful for fast iteration on the HTML/CSS, but slow to render in a browser. |
 | `--thumb-size <PX>` | `400` | Long-edge size of generated thumbnails, in pixels. |
+| `-d`, `--download-missing` | off | Attempt to fetch missing photos from Flickr's CDN using the `original` URL in each photo's sidecar JSON. See [Missing photos](#missing-photos). Off by default — no network access happens unless this flag is passed. |
 | `-j`, `--jobs <N>` | `0` (all cores) | Number of worker threads for parallel work. |
-| `-V`, `--version` |  |Displays the program name and version and exits. | 
+| `-V`, `--version` |  | Displays the program name and version and exits. |
 
 Set `RUST_LOG=info` (or `warn`/`debug`) to control logging verbosity.
 
@@ -100,11 +101,16 @@ image symlinks are reused.
 
 Flickr exports occasionally omit images that are still referenced from
 `albums.json` — typically because the photo was deleted, marked private after
-the export was prepared, or simply skipped during the backup. When the tool
-encounters a referenced photo that is not present in any `data-download-N/`
-directory, it falls back to the `original` URL recorded in that photo's
-`photo_<id>.json` sidecar and attempts to fetch the file directly from
-Flickr's CDN.
+the export was prepared, or simply skipped during the backup.
+
+By default, a referenced photo that isn't present in any `data-download-N/`
+directory is logged at `WARN` and skipped from the rendered output. The run
+itself never fails because of a missing photo. **No network access happens by
+default.**
+
+Pass `-d` / `--download-missing` to opt into a CDN fallback: when the flag is
+set, the tool will try to fetch each missing photo from the `original` URL
+recorded in its `photo_<id>.json` sidecar.
 
 - Downloaded files are written to a new `data/data-download-fetched/`
   directory under the input tree, named `flickr_<photo-id>_o.<ext>`. The
@@ -119,9 +125,9 @@ Flickr's CDN.
 - A photo with no sidecar JSON, or a sidecar whose `original` field is
   empty, is also skipped with a warning.
 
-If you don't want network access, run with `RUST_LOG=warn` to suppress the
-per-fetch info lines, or disconnect from the network — failed fetches are
-treated the same as before and degrade gracefully.
+To rerun without network access (after a previous successful download pass),
+simply omit `--download-missing`; cached files in `data-download-fetched/`
+are picked up by the normal scan and used like any other image.
 
 ## License
 

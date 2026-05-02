@@ -77,8 +77,17 @@ fn main() -> Result<()> {
     info!("{} unique photo(s) referenced by albums", needed_ids.len());
 
     let fetch_dir = data_root.join("data-download-fetched");
-    fs::create_dir_all(&fetch_dir).with_context(|| format!("create {}", fetch_dir.display()))?;
-    let resolved = resolve_photos(&needed_ids, &part_dir, &photo_index, &fetch_dir);
+    if args.download_missing {
+        fs::create_dir_all(&fetch_dir)
+            .with_context(|| format!("create {}", fetch_dir.display()))?;
+    }
+    let resolved = resolve_photos(
+        &needed_ids,
+        &part_dir,
+        &photo_index,
+        &fetch_dir,
+        args.download_missing,
+    );
     info!(
         "resolved {} photo(s); {} skipped (no image file)",
         resolved.len(),
@@ -178,6 +187,7 @@ fn resolve_photos(
     part_dir: &Path,
     photo_index: &PhotoIndex,
     fetch_dir: &Path,
+    download_missing: bool,
 ) -> Vec<WorkItem> {
     let downloaded = AtomicUsize::new(0);
     let download_failed = AtomicUsize::new(0);
@@ -198,7 +208,7 @@ fn resolve_photos(
 
             let src = match photo_index.get(id) {
                 Some(p) => p.to_path_buf(),
-                None => match try_download(id, photo.as_ref(), fetch_dir) {
+                None if download_missing => match try_download(id, photo.as_ref(), fetch_dir) {
                     Some(p) => {
                         downloaded.fetch_add(1, Ordering::Relaxed);
                         p
@@ -208,6 +218,12 @@ fn resolve_photos(
                         return None;
                     }
                 },
+                None => {
+                    warn!(
+                        "photo {id}: missing locally (pass --download-missing to fetch from Flickr)"
+                    );
+                    return None;
+                }
             };
 
             let filename = src

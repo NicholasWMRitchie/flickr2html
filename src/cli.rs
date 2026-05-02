@@ -35,6 +35,12 @@ pub struct Args {
     #[arg(long, default_value_t = 400)]
     pub thumb_size: u32,
 
+    /// Attempt to download photos that are referenced by an album but not
+    /// present in any `data-download-*/` directory, using the `original` URL
+    /// recorded in the photo's sidecar JSON. Off by default.
+    #[arg(short = 'd', long)]
+    pub download_missing: bool,
+
     /// Number of worker threads for parallel work. 0 = use all available cores.
     #[arg(short, long, default_value_t = 0)]
     pub jobs: usize,
