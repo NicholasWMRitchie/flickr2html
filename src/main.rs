@@ -1,4 +1,5 @@
 mod cli;
+mod download;
 mod exif;
 mod index;
 mod model;
@@ -75,7 +76,9 @@ fn main() -> Result<()> {
     let needed_ids = collect_referenced_ids(&albums);
     info!("{} unique photo(s) referenced by albums", needed_ids.len());
 
-    let resolved = resolve_photos(&needed_ids, &part_dir, &photo_index);
+    let fetch_dir = data_root.join("data-download-fetched");
+    fs::create_dir_all(&fetch_dir).with_context(|| format!("create {}", fetch_dir.display()))?;
+    let resolved = resolve_photos(&needed_ids, &part_dir, &photo_index, &fetch_dir);
     info!(
         "resolved {} photo(s); {} skipped (no image file)",
         resolved.len(),
@@ -174,22 +177,13 @@ fn resolve_photos(
     ids: &[String],
     part_dir: &Path,
     photo_index: &PhotoIndex,
+    fetch_dir: &Path,
 ) -> Vec<WorkItem> {
-    ids.par_iter()
+    let downloaded = AtomicUsize::new(0);
+    let download_failed = AtomicUsize::new(0);
+    let items: Vec<WorkItem> = ids
+        .par_iter()
         .filter_map(|id| {
-            let src = match photo_index.get(id) {
-                Some(p) => p.to_path_buf(),
-                None => {
-                    warn!("photo {id} referenced by an album but no image file found");
-                    return None;
-                }
-            };
-            let filename = src
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-                .to_string();
-            let kind = thumbs::detect(&src);
             let photo_path = part_dir.join(format!("photo_{id}.json"));
             let photo: Option<Photo> = match fs::read_to_string(&photo_path) {
                 Ok(s) => match serde_json::from_str(&s) {
@@ -199,11 +193,30 @@ fn resolve_photos(
                         None
                     }
                 },
-                Err(_) => {
-                    warn!("photo {id}: missing sidecar {}", photo_path.display());
-                    None
-                }
+                Err(_) => None,
             };
+
+            let src = match photo_index.get(id) {
+                Some(p) => p.to_path_buf(),
+                None => match try_download(id, photo.as_ref(), fetch_dir) {
+                    Some(p) => {
+                        downloaded.fetch_add(1, Ordering::Relaxed);
+                        p
+                    }
+                    None => {
+                        download_failed.fetch_add(1, Ordering::Relaxed);
+                        return None;
+                    }
+                },
+            };
+
+            let filename = src
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            let kind = thumbs::detect(&src);
+
             Some(WorkItem {
                 id: id.clone(),
                 src,
@@ -212,7 +225,35 @@ fn resolve_photos(
                 photo,
             })
         })
-        .collect()
+        .collect();
+    let dl = downloaded.load(Ordering::Relaxed);
+    let dl_failed = download_failed.load(Ordering::Relaxed);
+    if dl > 0 || dl_failed > 0 {
+        info!("downloaded {dl} missing photo(s); {dl_failed} could not be fetched");
+    }
+    items
+}
+
+/// Try to fetch a missing image from its `original` URL into `fetch_dir`.
+/// Returns the path of the downloaded file on success.
+fn try_download(id: &str, photo: Option<&Photo>, fetch_dir: &Path) -> Option<PathBuf> {
+    let Some(url) = photo.and_then(|p| p.original.as_deref()) else {
+        warn!("photo {id}: missing locally and no `original` URL in sidecar");
+        return None;
+    };
+    let ext = download::extension_from_url(url).unwrap_or_else(|| "bin".into());
+    let dst = fetch_dir.join(format!("flickr_{id}_o.{ext}"));
+    if dst.exists() {
+        return Some(dst);
+    }
+    info!("photo {id}: missing locally, fetching {url}");
+    match download::fetch_to(url, &dst) {
+        Ok(()) => Some(dst),
+        Err(e) => {
+            warn!("photo {id}: download failed ({e})");
+            None
+        }
+    }
 }
 
 fn materialize_images(items: &[WorkItem], out: &Path, copy: bool) -> Result<()> {

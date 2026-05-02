@@ -34,6 +34,10 @@ pub struct Photo {
     pub date_taken: String,
     #[serde(default)]
     pub rotation: i32,
+    /// Direct URL to the original-resolution image, used as a fallback when the
+    /// photo isn't present locally in any `data-download-*/` directory.
+    #[serde(default)]
+    pub original: Option<String>,
 }
 
 #[cfg(test)]

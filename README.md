@@ -96,9 +96,32 @@ Typical first run on a ~9 000-photo export takes about a minute on 8 cores
 output directory finish in a fraction of a second since cached thumbnails and
 image symlinks are reused.
 
-If a photo is referenced by an album but not actually present on disk (Flickr
-exports occasionally miss content), the tool logs a warning and skips it
-without failing the run.
+## Missing photos
+
+Flickr exports occasionally omit images that are still referenced from
+`albums.json` — typically because the photo was deleted, marked private after
+the export was prepared, or simply skipped during the backup. When the tool
+encounters a referenced photo that is not present in any `data-download-N/`
+directory, it falls back to the `original` URL recorded in that photo's
+`photo_<id>.json` sidecar and attempts to fetch the file directly from
+Flickr's CDN.
+
+- Downloaded files are written to a new `data/data-download-fetched/`
+  directory under the input tree, named `flickr_<photo-id>_o.<ext>`. The
+  prefix matches the existing `data-download-*` pattern, so subsequent runs
+  pick them up via the normal index scan and don't re-download.
+- The fetch is atomic (written to a `.part` temp file and renamed on
+  completion), so an interrupted run leaves no half-written files at the
+  final path.
+- Network errors, HTTP non-2xx responses, and timeouts are logged at `WARN`
+  and the photo is skipped from the rendered output. The run as a whole
+  never fails because of a missing photo.
+- A photo with no sidecar JSON, or a sidecar whose `original` field is
+  empty, is also skipped with a warning.
+
+If you don't want network access, run with `RUST_LOG=warn` to suppress the
+per-fetch info lines, or disconnect from the network — failed fetches are
+treated the same as before and degrade gracefully.
 
 ## License
 
